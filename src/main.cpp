@@ -83,9 +83,9 @@ int main(int argc, char* argv[]) {
     // ASR model — and may attempt a GPU init that hard-crashes — inside
     // initialize()). Flushed per line, this turns an otherwise-silent crash into
     // a log whose last entry pinpoints where it died. The key mirrors
-    // SettingsStore's "logging/enabled" (default on).
+    // SettingsStore's "logging/enabled" (default off).
     const bool loggingEnabled =
-        QSettings().value(QStringLiteral("logging/enabled"), true).toBool();
+        QSettings().value(QStringLiteral("logging/enabled"), false).toBool();
     if (loggingEnabled) {
         // Promote our categories to info level so the diagnostic context (the
         // "Whisper compute backend: ..." line logged right before a GPU init)
