@@ -448,8 +448,6 @@ void AppController::startTranscription() {
 }
 
 void AppController::finishTranscription(const QString& rawText) {
-    qCInfo(vtApp) << "Recognized text:" << rawText;
-
     const CommandProcessingResult processed =
         commandEngine_.processFinalText(rawText.toStdString());
     const QString text = QString::fromStdString(processed.text);
@@ -504,7 +502,7 @@ void AppController::pasteFinalText(const QString& finalText) {
     mac::restoreFrontmostApp();
 #endif
 
-    qCInfo(vtApp) << "Pasting" << finalText.size() << "chars:" << finalText;
+    qCInfo(vtApp) << "Pasting" << finalText.size() << "characters";
     paste_->pasteText(finalText);
 }
 

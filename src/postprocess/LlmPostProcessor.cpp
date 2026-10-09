@@ -54,9 +54,8 @@ void LlmPostProcessor::process(const LlmRequestConfig& cfg, const QString& text,
     // wait, not just a stalled transfer.
     req.setTransferTimeout(cfg.timeoutMs);
 
-    qCInfo(vtLlm) << "POST" << url.toString(QUrl::RemoveUserInfo)
-                  << "model:" << (cfg.model.isEmpty() ? QStringLiteral("(none)")
-                                                       : cfg.model);
+    // Endpoint URLs may carry tokens in query parameters. Do not log them.
+    qCInfo(vtLlm) << "Sending optional LLM request";
 
     QElapsedTimer elapsed;
     elapsed.start();
@@ -102,11 +101,12 @@ void LlmPostProcessor::process(const LlmRequestConfig& cfg, const QString& text,
                 }
 
                 if (error.isEmpty()) {
-                    qCInfo(vtLlm) << "Answer in" << seconds << "s:" << answer;
+                    qCInfo(vtLlm) << "LLM response received in" << seconds << "s";
                     done(answer, QString());
                 } else {
+                    // Server error details may echo dictated text or credentials.
                     qCWarning(vtLlm) << "Request failed after" << seconds
-                                     << "s, HTTP status" << status << "-" << error;
+                                     << "s, HTTP status" << status;
                     done(QString(), error);
                 }
             });

@@ -313,7 +313,7 @@ void SettingsStore::setLlmTimeoutSeconds(int s) {
 }
 
 bool SettingsStore::loggingEnabled() const {
-    return QSettings().value(keys::kLoggingEnabled, true).toBool();
+    return QSettings().value(keys::kLoggingEnabled, false).toBool();
 }
 void SettingsStore::setLoggingEnabled(bool on) {
     QSettings().setValue(keys::kLoggingEnabled, on);
