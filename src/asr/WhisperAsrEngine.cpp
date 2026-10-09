@@ -99,34 +99,6 @@ std::string trimmed(std::string s) {
     return s;
 }
 
-// DEBUG (env VT_DUMP_WAV): dump audio of pass `pass` as a 16-bit PCM WAV named
-// vt_<pass>_<tag>.wav, so a live repro can be replayed offline: "take" is the
-// recording the VAD heard, "decoded" the exact samples handed to whisper_full.
-void dumpWavDebug(const std::vector<float>& samples, int sampleRate, int pass,
-                  const char* tag) {
-    const char* dir = std::getenv("VT_DUMP_WAV");
-    if (!dir || !*dir)
-        return;
-    const std::string path = std::string(dir) + "/vt_" + std::to_string(pass) +
-                             "_" + tag + ".wav";
-    std::ofstream f(path, std::ios::binary);
-    if (!f)
-        return;
-    const auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<char*>(&v), 4); };
-    const auto u16 = [&](uint16_t v) { f.write(reinterpret_cast<char*>(&v), 2); };
-    const uint32_t dataBytes = static_cast<uint32_t>(samples.size()) * 2;
-    f.write("RIFF", 4); u32(36 + dataBytes); f.write("WAVE", 4);
-    f.write("fmt ", 4); u32(16); u16(1); u16(1);
-    u32(static_cast<uint32_t>(sampleRate)); u32(static_cast<uint32_t>(sampleRate) * 2);
-    u16(2); u16(16);
-    f.write("data", 4); u32(dataBytes);
-    for (float s : samples) {
-        const float c = std::clamp(s, -1.0f, 1.0f);
-        u16(static_cast<uint16_t>(static_cast<int16_t>(std::lround(c * 32767.0f))));
-    }
-    qCInfo(vtAsr) << "VT_DUMP_WAV: wrote" << samples.size() << "samples to" << QString::fromStdString(path);
-}
-
 // Loads a whisper context, swallowing C++ exceptions thrown by the compute
 // backend during init. ggml-vulkan (Vulkan-Hpp) throws vk::SystemError when
 // device / buffer / pipeline setup fails on a GPU that enumerated but can't
@@ -321,7 +293,6 @@ TranscriptionResult WhisperAsrEngine::transcribe(
     const bool useVad = vad_ && options.useVad;
     std::vector<float> speech;
     if (useVad) {
-        dumpWavDebug(audio.samples, audio.sampleRate, pass, "take");
         speech = extractSpeech(audio.samples, audio.sampleRate);
         if (speech.empty()) {
             qCDebug(vtAsr) << "transcribe: no speech in" << audio.durationSeconds()
@@ -388,7 +359,6 @@ TranscriptionResult WhisperAsrEngine::transcribe(
                    << params.n_threads << ", audio_ctx" << params.audio_ctx
                    << "/" << modelMaxCtx;
 
-    dumpWavDebug(samples, audio.sampleRate, pass, "decoded");
 
     const int rc = whisper_full(ctx_, params, samples.data(),
                                 static_cast<int>(samples.size()));
@@ -421,8 +391,7 @@ TranscriptionResult WhisperAsrEngine::transcribe(
 
     result.text = trimmed(std::move(text));
     if (looksLikePromptEcho(result.text, options.initialPrompt, speechSeconds)) {
-        qCInfo(vtAsr) << "Discarded output repeating the initial prompt:"
-                      << QString::fromStdString(result.text);
+        qCInfo(vtAsr) << "Discarded output repeating the initial prompt";
         result.text.clear();
     }
     result.ok = true;
