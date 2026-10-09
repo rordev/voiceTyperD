@@ -75,8 +75,7 @@ void CommandDetectionLoop::tick() {
         const TranscriptionResult res = asr->transcribe(tail, opt);
         const bool stop = res.ok && commands->containsStopCommand(res.text);
         if (stop) {
-            qCInfo(vtCmd) << "Stop command detected mid-recording:"
-                          << QString::fromStdString(res.text);
+            qCInfo(vtCmd) << "Stop command detected mid-recording";
             QMetaObject::invokeMethod(this, "onStopDetectedInternal",
                                       Qt::QueuedConnection);
         }
