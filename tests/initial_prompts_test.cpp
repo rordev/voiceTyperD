@@ -1,7 +1,7 @@
 // Standalone correctness check for the initial-prompt config (InitialPrompts)
-// and the VAD speech shaping (SpeechCompaction). Not part of the app build;
-// requires only Qt6Core. Run from the repo root (it reads the bundled
-// config/prompts.default.json); build with:
+// and the VAD speech shaping and input level (SpeechCompaction). Not part of
+// the app build; requires only Qt6Core. Run from the repo root (it reads the
+// bundled config/prompts.default.json); build with:
 //   g++ -std=c++17 -fPIC -Isrc tests/initial_prompts_test.cpp
 //       src/asr/InitialPrompts.cpp src/asr/SpeechCompaction.cpp
 //       $(pkg-config --cflags --libs Qt6Core) -o initial_prompts_test
@@ -11,6 +11,8 @@
 
 #include <QFile>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -169,6 +171,21 @@ int main() {
     checkSamples("unsorted_input", compactSpeech(audio, {{500, 600}, {100, 200}}, 10, 50),
                  cat({range(90, 200), range(200, 225), range(475, 500), range(500, 610)}));
     checkSamples("out_of_range_dropped", compactSpeech(audio, {{1200, 1300}}, 10, 50), {});
+
+    // --- VAD input level ------------------------------------------------
+    const auto near = [](float got, float want) { return std::abs(got - want) < 1e-3f * want; };
+    // Loudest frame RMS 0.01: lifted 10x to reach 0.1, the quiet frame does not count.
+    std::vector<float> quiet(200, 0.001f);
+    std::fill(quiet.begin() + 100, quiet.end(), -0.01f);
+    checkBool("quiet_take_lifted_by_loudest_frame", near(levelGain(quiet, 100, 0.1f, 100.0f), 10.0f), true);
+    checkBool("gain_capped", near(levelGain(std::vector<float>(64, 1e-5f), 32, 0.1f, 100.0f), 100.0f), true);
+    checkBool("loud_take_not_attenuated", near(levelGain(std::vector<float>(64, 0.5f), 32, 0.1f, 100.0f), 1.0f), true);
+    checkBool("silence_not_boosted", near(levelGain(std::vector<float>(64, 0.0f), 32, 0.1f, 100.0f), 1.0f), true);
+    checkBool("empty_not_boosted", near(levelGain({}, 32, 0.1f, 100.0f), 1.0f), true);
+    // A short last frame is measured over its own length.
+    std::vector<float> tail(40, 0.001f);
+    std::fill(tail.begin() + 32, tail.end(), 0.02f);
+    checkBool("partial_frame_measured", near(levelGain(tail, 32, 0.1f, 100.0f), 5.0f), true);
 
     std::printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASS" : "FAILURES",
                 g_failures, g_failures == 1 ? "" : "s");

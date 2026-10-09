@@ -99,9 +99,19 @@ int main(int argc, char** argv) {
                 if (!r.ok || !r.text.empty())
                     return 10;
             }
+
+            // A quiet microphone (about -67 dBFS): whisper reads it, so the
+            // VAD must not drop it as silence or lose its edges.
+            vt::AudioBuffer quiet = audio;
+            for (float& s : quiet.samples)
+                s *= 0.003f;
+            const auto q = engine.transcribe(quiet, prompted);
+            if (!q.ok || q.text.find("my fellow Americans") == std::string::npos ||
+                q.text.find("your country") == std::string::npos)
+                return 11;
         }
     }
     std::puts(withVad
-                  ? "PASS: short speech, trailing pauses, shared context, silence, prompt, VAD noise"
+                  ? "PASS: short speech, trailing pauses, shared context, silence, prompt, VAD noise, quiet mic"
                   : "PASS: short speech, trailing pauses, shared context, silence and prompt");
 }

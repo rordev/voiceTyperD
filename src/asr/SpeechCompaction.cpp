@@ -1,6 +1,7 @@
 #include "asr/SpeechCompaction.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace vt {
 
@@ -46,6 +47,22 @@ std::vector<float> compactSpeech(const std::vector<float>& samples,
     }
     append(prevEnd, std::min(n, prevEnd + edgePad));
     return out;
+}
+
+float levelGain(const std::vector<float>& samples, int frame, float targetRms,
+                float maxGain) {
+    double loudest = 0.0; // mean square of the loudest frame
+    for (std::size_t i = 0; i < samples.size(); i += frame) {
+        const std::size_t end = std::min(samples.size(), i + frame);
+        double sum = 0.0;
+        for (std::size_t j = i; j < end; ++j)
+            sum += static_cast<double>(samples[j]) * samples[j];
+        loudest = std::max(loudest, sum / static_cast<double>(end - i));
+    }
+    if (loudest <= 0.0)
+        return 1.0f;
+    const double gain = targetRms / std::sqrt(loudest);
+    return static_cast<float>(std::clamp(gain, 1.0, static_cast<double>(maxGain)));
 }
 
 } // namespace vt

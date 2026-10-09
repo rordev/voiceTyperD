@@ -20,4 +20,10 @@ std::vector<float> compactSpeech(const std::vector<float>& samples,
                                  std::vector<SpeechSpan> spans, int edgePad,
                                  int maxPause);
 
+// Gain that lifts the loudest `frame`-sample stretch of `samples` to an RMS of
+// `targetRms`, capped at `maxGain`. Never below 1: loud input is left alone.
+// Returns 1 for silence.
+float levelGain(const std::vector<float>& samples, int frame, float targetRms,
+                float maxGain);
+
 } // namespace vt

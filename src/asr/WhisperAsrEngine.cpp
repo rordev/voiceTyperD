@@ -75,6 +75,23 @@ int pickThreadCount(int requested) {
 constexpr double kSpeechEdgePadSeconds = 0.25;
 constexpr double kMaxPauseSeconds = 1.0;
 
+// Silero's speech probability falls with the input level: speech at about
+// -57 dBFS already loses its quieter words, and at -67 dBFS none is found,
+// while whisper still transcribes it. The VAD therefore hears the take lifted
+// so its loudest 32 ms (one VAD window) reach -20 dBFS, at most +40 dB. Only
+// the VAD hears the boost. Lifted hiss, hum, rumble and key clicks still
+// score under 0.1 and a breath under 0.4, below the 0.5 speech threshold.
+constexpr int kLevelFrameSamples = 512;
+constexpr float kVadTargetRms = 0.1f;
+constexpr float kVadMaxGain = 100.0f;
+
+// Stock Silero segmentation drops speech shorter than 250 ms and ends a
+// segment after 100 ms of silence, before it merges neighbours: a quick "да"
+// or a last word said after a short breath vanished. Pauses under 300 ms now
+// stay inside a segment, and 100 ms of speech is enough to keep.
+constexpr int kVadMinSpeechMs = 100;
+constexpr int kVadMinSilenceMs = 300;
+
 std::string trimmed(std::string s) {
     const auto notSpace = [](unsigned char c) { return !std::isspace(c); };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
@@ -82,15 +99,16 @@ std::string trimmed(std::string s) {
     return s;
 }
 
-// DEBUG (env VT_DUMP_WAV): dump the exact samples handed to whisper_full as a
-// 16-bit PCM WAV, so a live repro can be replayed offline at any audio_ctx.
-void dumpWavDebug(const std::vector<float>& samples, int sampleRate) {
+// DEBUG (env VT_DUMP_WAV): dump audio of pass `pass` as a 16-bit PCM WAV named
+// vt_<pass>_<tag>.wav, so a live repro can be replayed offline: "take" is the
+// recording the VAD heard, "decoded" the exact samples handed to whisper_full.
+void dumpWavDebug(const std::vector<float>& samples, int sampleRate, int pass,
+                  const char* tag) {
     const char* dir = std::getenv("VT_DUMP_WAV");
     if (!dir || !*dir)
         return;
-    static std::atomic<int> counter{0};
-    const std::string path =
-        std::string(dir) + "/vt_" + std::to_string(counter.fetch_add(1)) + ".wav";
+    const std::string path = std::string(dir) + "/vt_" + std::to_string(pass) +
+                             "_" + tag + ".wav";
     std::ofstream f(path, std::ios::binary);
     if (!f)
         return;
@@ -298,9 +316,12 @@ TranscriptionResult WhisperAsrEngine::transcribe(
 
     // Only speech reaches whisper. A recording (or detection window) without
     // any is not decoded at all: whisper would invent a phrase for the noise.
+    static std::atomic<int> passCounter{0};
+    const int pass = passCounter.fetch_add(1);
     const bool useVad = vad_ && options.useVad;
     std::vector<float> speech;
     if (useVad) {
+        dumpWavDebug(audio.samples, audio.sampleRate, pass, "take");
         speech = extractSpeech(audio.samples, audio.sampleRate);
         if (speech.empty()) {
             qCDebug(vtAsr) << "transcribe: no speech in" << audio.durationSeconds()
@@ -367,7 +388,7 @@ TranscriptionResult WhisperAsrEngine::transcribe(
                    << params.n_threads << ", audio_ctx" << params.audio_ctx
                    << "/" << modelMaxCtx;
 
-    dumpWavDebug(samples, audio.sampleRate);
+    dumpWavDebug(samples, audio.sampleRate, pass, "decoded");
 
     const int rc = whisper_full(ctx_, params, samples.data(),
                                 static_cast<int>(samples.size()));
@@ -412,9 +433,22 @@ TranscriptionResult WhisperAsrEngine::transcribe(
 
 std::vector<float> WhisperAsrEngine::extractSpeech(
     const std::vector<float>& samples, int sampleRate) {
+    const float gain =
+        levelGain(samples, kLevelFrameSamples, kVadTargetRms, kVadMaxGain);
+    std::vector<float> boosted;
+    if (gain > 1.0f) {
+        boosted.reserve(samples.size());
+        for (float s : samples)
+            boosted.push_back(s * gain);
+        qCDebug(vtAsr) << "VAD input boosted by" << 20.0 * std::log10(gain) << "dB";
+    }
+    const std::vector<float>& vadInput = boosted.empty() ? samples : boosted;
+
+    whisper_vad_params vparams = whisper_vad_default_params();
+    vparams.min_speech_duration_ms = kVadMinSpeechMs;
+    vparams.min_silence_duration_ms = kVadMinSilenceMs;
     whisper_vad_segments* segments = whisper_vad_segments_from_samples(
-        vad_, whisper_vad_default_params(), samples.data(),
-        static_cast<int>(samples.size()));
+        vad_, vparams, vadInput.data(), static_cast<int>(vadInput.size()));
     if (!segments) {
         qCWarning(vtAsr) << "VAD failed; transcribing the whole recording";
         return samples;
