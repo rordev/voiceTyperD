@@ -1,7 +1,9 @@
 # LM Studio over Tailscale (Windows host + M1 Mac client)
 
 This setup sends **recognized text only**, not raw microphone audio, to
-LM Studio on the Windows RTX 5090. Speech recognition remains local through
+LM Studio on the Windows RTX 5090. Before enabling remote processing, verify
+both Windows and Apple Silicon checks on this pull request are green; a passing
+endpoint-policy unit test alone does not validate the desktop builds. Speech recognition remains local through
 whisper.cpp (Metal on an Apple Silicon Mac, CUDA on Windows). LLM processing
 is optional and defaults to **off**. If LM Studio is unavailable, the original
 dictated text is pasted unchanged.
