@@ -296,6 +296,14 @@ The **LLM** tab holds the [LLM processing](#llm-processing) settings:
 
 ## Install (prebuilt packages)
 
+> **Why are the CUDA builds so large?** The `all` and `cuda` packages and
+> installers weigh about 600 MB, against 40–55 MB for `vulkan`, because they
+> bundle the CUDA runtime libraries, so the CUDA toolkit doesn't have to be
+> installed. Nearly all of that is NVIDIA's cuBLAS (cuBLASLt alone is over
+> 400 MB). The NVIDIA driver itself is **not** included and must already be
+> installed. If you don't need CUDA, the much smaller `vulkan` build runs on
+> NVIDIA GPUs too, through the regular Vulkan driver.
+
 ### Ubuntu / Debian (`.deb`)
 
 One package per compute backend (GitHub releases ship `vulkan` and `all`; the
