@@ -460,8 +460,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build -j
 ```
 
-The app starts in the system tray (no main window). Left-click the tray icon or
-press the hotkey to start/stop dictation; right-click for the menu.
+The app starts in the system tray (no main window). Press the hotkey to
+start/stop dictation; click the tray icon for the menu (on Linux, right-click
+if your tray host does not open it on a left click).
 
 ### Build & run — Windows
 

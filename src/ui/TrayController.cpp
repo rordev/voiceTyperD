@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCursor>
 #include <QFont>
 #include <QMenu>
 #include <QPainter>
@@ -37,12 +38,17 @@ TrayController::TrayController(QObject* parent) : QObject(parent) {
     tray_.setIcon(makeIcon());
     tray_.setToolTip(tr("voiceTyper — idle"));
 
+    // A click on the icon never starts dictation: it takes focus from the field
+    // the text is meant for, so the paste would land elsewhere. Windows opens
+    // the menu only on a right click; a left click pops it up the same way Qt
+    // does for a right click. Elsewhere the tray host decides what a click does.
+#ifdef Q_OS_WIN
     connect(&tray_, &QSystemTrayIcon::activated, this,
             [this](QSystemTrayIcon::ActivationReason reason) {
-                if (reason == QSystemTrayIcon::Trigger ||
-                    reason == QSystemTrayIcon::DoubleClick)
-                    emit toggleRecordingRequested();
+                if (reason == QSystemTrayIcon::Trigger)
+                    menu_->popup(QCursor::pos());
             });
+#endif
 }
 
 TrayController::~TrayController() { delete menu_; }
