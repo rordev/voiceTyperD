@@ -48,9 +48,17 @@ OverlayWindow::OverlayWindow(QWidget* parent) : QWidget(parent) {
         pulseOn_ = !pulseOn_;
         update();
     });
+
+    stepTimer_.setInterval(250);
+    connect(&stepTimer_, &QTimer::timeout, this, [this]() {
+        elapsed_ = stepClock_.elapsed() / 1000.0;
+        update();
+    });
 }
 
 void OverlayWindow::showOverlay() {
+    processing_ = false;
+    stepTimer_.stop();
     positionInCorner();
     pulseOn_ = true;
     pulseTimer_.start();
@@ -58,8 +66,18 @@ void OverlayWindow::showOverlay() {
     raise();
 }
 
+void OverlayWindow::showProcessing(const QString& status) {
+    processing_ = true;
+    status_ = status;
+    elapsed_ = 0.0;
+    stepClock_.start();
+    stepTimer_.start();
+    update();
+}
+
 void OverlayWindow::hideOverlay() {
     pulseTimer_.stop();
+    stepTimer_.stop();
     hide();
 }
 
@@ -69,6 +87,8 @@ void OverlayWindow::setStatus(const QString& status) {
 }
 
 void OverlayWindow::setElapsedSeconds(double seconds) {
+    if (processing_)
+        return; // the step's own clock drives the time now
     elapsed_ = seconds;
     update();
 }
@@ -95,10 +115,14 @@ void OverlayWindow::paintEvent(QPaintEvent*) {
     bg.addRoundedRect(rect().adjusted(0, 0, -1, -1), 12, 12);
     p.fillPath(bg, QColor(28, 28, 30, 225));
 
-    // Pulsing record dot.
+    // Recording: dot, status and time on top, the level meter below.
+    // Processing has no meter, so its single row is centered.
+    const int rowTop = processing_ ? (kHeight - 28) / 2 : 8;
+
+    // Pulsing dot: red while recording, amber while processing.
     const int dotR = 7;
-    const QPoint dotCenter(20, 22);
-    QColor dot(231, 76, 60);
+    const QPoint dotCenter(20, rowTop + 14);
+    QColor dot = processing_ ? QColor(243, 156, 18) : QColor(231, 76, 60);
     dot.setAlpha(pulseOn_ ? 255 : 90);
     p.setPen(Qt::NoPen);
     p.setBrush(dot);
@@ -109,7 +133,7 @@ void OverlayWindow::paintEvent(QPaintEvent*) {
     QFont f = p.font();
     f.setPointSizeF(f.pointSizeF() + 0.5);
     p.setFont(f);
-    const QRect statusRect(38, 8, kWidth - 100, 28);
+    const QRect statusRect(38, rowTop, kWidth - 100, 28);
     p.drawText(statusRect, Qt::AlignVCenter | Qt::AlignLeft,
                QFontMetrics(f).elidedText(status_, Qt::ElideRight,
                                           statusRect.width()));
@@ -123,8 +147,11 @@ void OverlayWindow::paintEvent(QPaintEvent*) {
     mono.setStyleHint(QFont::Monospace);
     mono.setPointSizeF(mono.pointSizeF() + 1.0);
     p.setFont(mono);
-    p.drawText(QRect(kWidth - 70, 8, 58, 28), Qt::AlignVCenter | Qt::AlignRight,
+    p.drawText(QRect(kWidth - 70, rowTop, 58, 28), Qt::AlignVCenter | Qt::AlignRight,
                time);
+
+    if (processing_)
+        return;
 
     // Level meter.
     const QRect meter(20, 44, kWidth - 40, 8);

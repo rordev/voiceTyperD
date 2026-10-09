@@ -376,7 +376,7 @@ void AppController::onRecordingStopped(bool stoppedByVoice) {
     if (tray_)
         tray_->setRecording(false);
     if (overlay_ && overlay_->isVisible())
-        overlay_->setStatus(tr("Transcribing..."));
+        overlay_->showProcessing(tr("Transcribing..."));
 
     processing_ = true;
     startTranscription();
@@ -473,7 +473,7 @@ void AppController::finishTranscription(const QString& rawText) {
     // processing_ stays set until the answer arrives, so a new take can't
     // start and paste ahead of this one.
     if (overlay_ && overlay_->isVisible())
-        overlay_->setStatus(tr("Processing with LLM..."));
+        overlay_->showProcessing(tr("Processing with LLM..."));
     llm_->process(llmConfig(), text,
                   [this, text](const QString& answer, const QString& error) {
                       if (error.isEmpty()) {
