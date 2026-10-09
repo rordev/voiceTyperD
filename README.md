@@ -17,9 +17,10 @@ account, no telemetry. Your audio never leaves the device.
   keystroke both need Accessibility permission).
 
 <p align="center">
-  <img src="docs/settings.png" alt="voiceTyper Settings window" width="480">
+  <img src="docs/settings.png" alt="voiceTyper Settings window, General tab" width="400">
+  <img src="docs/settings-llm.png" alt="voiceTyper Settings window, LLM tab" width="400">
   <br>
-  <em>The Settings window — recognition language, global hotkey, Whisper model, compute backend, voice-stop tuning, and the live commands editor.</em>
+  <em>The Settings window. <b>General</b>: recognition language, hotkeys, Whisper model, compute backend, voice-stop tuning, and the live commands editor. <b>LLM</b>: optional processing of the dictated text by an OpenAI-compatible model.</em>
 </p>
 
 ---
