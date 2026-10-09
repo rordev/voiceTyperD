@@ -1,9 +1,11 @@
 #include "postprocess/LlmPostProcessor.h"
+#include "postprocess/LlmEndpointSecurity.h"
 
 #include "core/Logging.h"
 
 #include <QElapsedTimer>
 #include <QNetworkAccessManager>
+#include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QUrl>
@@ -11,7 +13,10 @@
 namespace vt {
 
 LlmPostProcessor::LlmPostProcessor(QObject* parent)
-    : QObject(parent), nam_(new QNetworkAccessManager(this)) {}
+    : QObject(parent), nam_(new QNetworkAccessManager(this)) {
+    // Never allow a configured system HTTP proxy to bypass the tailnet.
+    nam_->setProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+}
 
 LlmPostProcessor::~LlmPostProcessor() { cancel(); }
 
@@ -30,13 +35,8 @@ void LlmPostProcessor::process(const LlmRequestConfig& cfg, const QString& text,
     cancel();
 
     const QUrl url(cfg.endpoint.trimmed(), QUrl::StrictMode);
-    if (!url.isValid() ||
-        (url.scheme() != QLatin1String("https") &&
-         url.scheme() != QLatin1String("http"))) {
-        const QString error =
-            cfg.endpoint.trimmed().isEmpty()
-                ? tr("No endpoint URL is set.")
-                : tr("Invalid endpoint URL '%1'.").arg(cfg.endpoint.trimmed());
+    QString error;
+    if (!validatePrivateLlmEndpoint(url, &error)) {
         QMetaObject::invokeMethod(
             this, [done, error]() { done(QString(), error); },
             Qt::QueuedConnection);
@@ -44,6 +44,9 @@ void LlmPostProcessor::process(const LlmRequestConfig& cfg, const QString& text,
     }
 
     QNetworkRequest req(url);
+    // Redirects could send plaintext and tokens to a different server.
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                     QNetworkRequest::ManualRedirectPolicy);
     req.setHeader(QNetworkRequest::ContentTypeHeader,
                   QByteArrayLiteral("application/json"));
     req.setRawHeader("Accept", "application/json");
