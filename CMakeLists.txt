@@ -102,6 +102,8 @@ set(VOICETYPER_SOURCES
 
     src/postprocess/LlmChat.cpp
     src/postprocess/LlmChat.h
+    src/postprocess/LlmEndpointSecurity.cpp
+    src/postprocess/LlmEndpointSecurity.h
     src/postprocess/LlmPostProcessor.cpp
     src/postprocess/LlmPostProcessor.h
 
@@ -274,3 +276,14 @@ endif()
 
 install(TARGETS voiceTyper RUNTIME DESTINATION bin)
 install(FILES ${VT_BUNDLED_DATA_FILES} DESTINATION bin)
+
+# Endpoint policy tests do not need a Whisper model or microphone.
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(llm_endpoint_security_test
+        tests/llm_endpoint_security_test.cpp
+        src/postprocess/LlmEndpointSecurity.cpp)
+    target_include_directories(llm_endpoint_security_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(llm_endpoint_security_test PRIVATE Qt6::Core Qt6::Network)
+    add_test(NAME llm_endpoint_security COMMAND llm_endpoint_security_test)
+endif()
