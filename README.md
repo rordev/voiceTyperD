@@ -29,7 +29,7 @@ account, no telemetry. Your audio never leaves the device.
 
 Diagnostic file logging is **off by default**. Even if enabled, full recognized text, pasted text, stop-command transcripts, and LLM responses are not logged. The `VT_DUMP_WAV` audio-dump feature has been removed. Earlier builds may have saved sensitive content in `voicetyper.log` or debug WAV files; this change does not delete those files.
 
-Optional LLM processing sends transcription text to the configured endpoint when enabled. Keep it off for strictly offline dictation.
+Optional LLM processing sends transcription text only to a validated localhost or numeric Tailscale endpoint when enabled. Keep it off for strictly offline dictation. See [LM Studio over Tailscale](docs/LM_STUDIO_TAILSCALE.md).
 
 ---
 
@@ -55,11 +55,11 @@ Optional LLM processing sends transcription text to the configured endpoint when
   speak, not just at the end. The stop word is stripped from the result.
 - 🌍 **Multilingual.** 16 recognition languages plus auto-detect, with an
   optional **translate-to-English** mode (Whisper's built-in translation).
-- 🤖 **Optional LLM processing.** Send the dictated text to any
-  OpenAI-compatible chat-completions endpoint (cloud API or a local Ollama /
-  llama.cpp server / LM Studio) with your prompt, and paste the model's answer
-  instead — toggled on the fly with **Ctrl+Alt+A**, like translation. See
-  [LLM processing](#llm-processing).
+- 🤖 **Optional LLM processing.** Send dictated text to an explicitly configured
+  local or Tailscale OpenAI-compatible chat-completions server (such as LM Studio)
+  and paste its answer instead. Public cloud, DNS-hostname and ordinary LAN
+  endpoints are blocked in this fork. Toggled with **Ctrl+Alt+A**. See
+  [LM Studio over Tailscale](docs/LM_STUDIO_TAILSCALE.md).
 - ✍️ **Consistent punctuation.** A per-language *initial prompt* (editable
   `prompts.json`) shows Whisper the punctuation and casing style to follow, so
   it stops alternating between tidy prose and unpunctuated lowercase. See
@@ -230,12 +230,13 @@ With LLM processing on, the dictated text (after voice commands) is sent to an
 OpenAI-compatible **chat-completions** endpoint, and the model's answer is
 pasted instead of the text. Turn it on and off with the hotkey (default
 **Ctrl+Alt+A**; a toast confirms, and the tray icon shows an **AI** badge while
-it is on) or under **Settings → LLM**. Any server that speaks the OpenAI chat
-format works: a cloud API, or a local Ollama, llama.cpp server or LM Studio.
+it is on) or under **Settings → LLM**. In this fork, only loopback and numeric
+Tailscale IPv4 chat-completions endpoints are accepted. See
+[LM Studio over Tailscale](docs/LM_STUDIO_TAILSCALE.md).
 
-- **Endpoint URL** — the full URL, e.g.
-  `https://api.example.com/v1/chat/completions` or
-  `http://localhost:11434/v1/chat/completions`. The only required field.
+- **Endpoint URL** — e.g. `http://127.0.0.1:1234/v1/chat/completions`
+  for local LM Studio, or the actual Windows Tailscale IP in place of `127.0.0.1`.
+  Numeric IP, explicit port, and exact endpoint path are required.
 - **API key** — optional; sent as `Authorization: Bearer <key>`. Stored
   unencrypted in the app settings.
 - **Model** — optional; left out of the request when empty (for servers with a
