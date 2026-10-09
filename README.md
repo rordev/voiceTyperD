@@ -25,6 +25,14 @@ account, no telemetry. Your audio never leaves the device.
 
 ---
 
+## Privacy in this fork
+
+Diagnostic file logging is **off by default**. Even if enabled, full recognized text, pasted text, stop-command transcripts, and LLM responses are not logged. The `VT_DUMP_WAV` audio-dump feature has been removed. Earlier builds may have saved sensitive content in `voicetyper.log` or debug WAV files; this change does not delete those files.
+
+Optional LLM processing sends transcription text to the configured endpoint when enabled. Keep it off for strictly offline dictation.
+
+---
+
 ## Features
 
 - 🎙️ **Push-to-talk dictation anywhere.** A single global hotkey starts/stops
