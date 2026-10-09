@@ -3,6 +3,7 @@
 #include "asr/ComputeBackends.h"
 #include "commands/CommandConfig.h"
 #include "postprocess/LlmPostProcessor.h"
+#include "postprocess/LlmEndpointSecurity.h"
 #include "settings/SettingsStore.h"
 
 #include <QCheckBox>
@@ -238,11 +239,11 @@ QWidget* SettingsWindow::buildLlmTab() {
 
     llmEndpoint_ = new QLineEdit(page);
     llmEndpoint_->setPlaceholderText(
-        QStringLiteral("https://api.example.com/v1/chat/completions"));
+        QStringLiteral("http://100.101.1.2:1234/v1/chat/completions"));
     llmEndpoint_->setToolTip(
-        tr("Full URL of the chat-completions endpoint of any OpenAI-compatible "
-           "server: a cloud API, or a local Ollama, llama.cpp server or LM "
-           "Studio."));
+        tr("Security restricted: use 127.0.0.1 or the Windows PC's actual "
+           "Tailscale IPv4 address, with port and /v1/chat/completions. "
+           "General cloud and LAN endpoints are blocked."));
     form->addRow(tr("Endpoint URL:"), llmEndpoint_);
 
     llmApiKey_ = new QLineEdit(page);
@@ -480,10 +481,7 @@ bool SettingsWindow::llmConfigFromFields(LlmRequestConfig* cfg,
     cfg->endpoint = llmEndpoint_->text().trimmed();
     if (!cfg->endpoint.isEmpty()) {
         const QUrl url(cfg->endpoint, QUrl::StrictMode);
-        if (!url.isValid() || url.host().isEmpty() ||
-            (url.scheme() != QLatin1String("https") &&
-             url.scheme() != QLatin1String("http"))) {
-            *error = tr("The endpoint must be an http:// or https:// URL.");
+        if (!validatePrivateLlmEndpoint(url, error)) {
             return false;
         }
     }
