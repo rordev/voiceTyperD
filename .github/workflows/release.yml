@@ -301,15 +301,38 @@ jobs:
     needs: [version, windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
+      # Full history and tags, for the notes below. Before the download:
+      # checkout cleans the workspace.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+
+      # generate_release_notes builds notes only from merged pull requests,
+      # and changes land on master directly, so a release showed nothing but
+      # the "Full Changelog" link. List the commit messages since the
+      # previous release instead; GitHub appends its link below them.
+      - name: Write release notes
+        run: |
+          PREV="$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)"
+          {
+            echo "## Changes${PREV:+ since $PREV}"
+            echo
+            git log --reverse --no-merges --max-count=50 \
+                --invert-grep --grep='^Bump version' \
+                --format='### %s%n%n%b' ${PREV:+"$PREV..HEAD"}
+          } | sed -E '/^Co-[Aa]uthored-[Bb]y:/d' | cat -s > release-notes.md
+          cat release-notes.md
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.version }}
           name: voiceTyper ${{ needs.version.outputs.version }}
+          body_path: release-notes.md
           generate_release_notes: true
           # Scoped to the actual installers, not artifacts/**/* - that swept
           # up an incidental cuda-installer.log from the CUDA toolkit action

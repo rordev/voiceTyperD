@@ -305,7 +305,7 @@ QWidget* SettingsWindow::buildLlmTab() {
     llmStripPattern_ = new QLineEdit(page);
     llmStripPattern_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     llmStripPattern_->setPlaceholderText(
-        tr("Optional, e.g. %1").arg(QStringLiteral(R"(<think>[\s\S]*?</think>)")));
+        tr("Optional, e.g. %1").arg(QStringLiteral("<think>[\\s\\S]*?</think>")));
     llmStripPattern_->setToolTip(
         tr("Every match of this regular expression is removed from the answer "
            "before it is pasted — e.g. the model's reasoning or remarks. Empty: "
@@ -316,7 +316,7 @@ QWidget* SettingsWindow::buildLlmTab() {
     llmExtraParams_->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
     llmExtraParams_->setPlaceholderText(
         tr("Optional, e.g. %1")
-            .arg(QStringLiteral(R"({"temperature": 0.2, "max_tokens": 4096})")));
+            .arg(QStringLiteral("{\"temperature\": 0.2, \"max_tokens\": 4096}")));
     llmExtraParams_->setToolTip(
         tr("JSON object merged into the request body, for parameters the "
            "server supports (temperature, max_tokens, ...)."));
