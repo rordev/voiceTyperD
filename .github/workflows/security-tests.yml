@@ -1,0 +1,33 @@
+name: Private LLM endpoint security tests
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-llm-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  endpoint-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt network development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ pkg-config qt6-base-dev
+      - name: Compile endpoint validation test
+        run: |
+          g++ -std=c++20 -fPIC -Isrc \
+            tests/llm_endpoint_security_test.cpp \
+            src/postprocess/LlmEndpointSecurity.cpp \
+            $(pkg-config --cflags --libs Qt6Core Qt6Network) \
+            -o /tmp/llm_endpoint_security_test
+      - name: Run endpoint validation test
+        run: /tmp/llm_endpoint_security_test
