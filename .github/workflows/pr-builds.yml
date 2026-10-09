@@ -90,10 +90,9 @@ jobs:
       # The DMG is ad-hoc signed, not notarized.
       - name: Package Apple Silicon DMG (Metal enabled)
         env:
-          QT_DIR: ${{ env.QT_ROOT_DIR }}
           VT_PACKAGE_MODEL: none
           VOICETYPER_EXTRA_CMAKE_ARGS: "-DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON -DVOICETYPER_WITH_CUDA=OFF -DVOICETYPER_WITH_VULKAN=OFF"
-        run: scripts/package-macos.sh
+        run: QT_DIR="$QT_ROOT_DIR" scripts/package-macos.sh
 
       - name: Verify arm64 executable and DMG
         run: |
