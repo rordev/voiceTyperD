@@ -100,9 +100,10 @@ set(VOICETYPER_SOURCES
     src/hotkey/HotkeyParsing.cpp
     src/hotkey/HotkeyParsing.h
 
-    src/postprocess/TextPostProcessor.h
-    src/postprocess/NoOpTextPostProcessor.h
-    src/postprocess/HttpTextPostProcessor.h
+    src/postprocess/LlmChat.cpp
+    src/postprocess/LlmChat.h
+    src/postprocess/LlmPostProcessor.cpp
+    src/postprocess/LlmPostProcessor.h
 
     src/settings/SettingsStore.cpp
     src/settings/SettingsStore.h

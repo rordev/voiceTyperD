@@ -32,8 +32,15 @@ constexpr auto kClipboardDelay = "clipboard/restoreDelayMs";
 constexpr auto kCdEnabled = "commandDetection/enabled";
 constexpr auto kCdInterval = "commandDetection/intervalMs";
 constexpr auto kCdWindow = "commandDetection/windowSeconds";
-constexpr auto kPpEnabled = "postProcess/enabled";
-constexpr auto kPpEndpoint = "postProcess/endpoint";
+constexpr auto kLlmHotkey = "hotkey/llmSequence";
+constexpr auto kLlmEnabled = "llm/enabled";
+constexpr auto kLlmEndpoint = "llm/endpoint";
+constexpr auto kLlmApiKey = "llm/apiKey";
+constexpr auto kLlmModel = "llm/model";
+constexpr auto kLlmPrompt = "llm/prompt";
+constexpr auto kLlmStripPattern = "llm/stripPattern";
+constexpr auto kLlmExtraParams = "llm/extraParams";
+constexpr auto kLlmTimeout = "llm/timeoutSeconds";
 } // namespace keys
 
 constexpr auto kVadModelFile = "ggml-silero-v6.2.0.bin";
@@ -187,6 +194,14 @@ void SettingsStore::setTranslateHotkey(const QString& seq) {
     emit changed();
 }
 
+QString SettingsStore::llmHotkey() const {
+    return QSettings().value(keys::kLlmHotkey, "Ctrl+Alt+A").toString();
+}
+void SettingsStore::setLlmHotkey(const QString& seq) {
+    QSettings().setValue(keys::kLlmHotkey, seq);
+    emit changed();
+}
+
 bool SettingsStore::overlayEnabled() const {
     return QSettings().value(keys::kOverlay, true).toBool();
 }
@@ -227,19 +242,73 @@ void SettingsStore::setCommandDetectionWindowSeconds(double s) {
     emit changed();
 }
 
-bool SettingsStore::postProcessEnabled() const {
-    return QSettings().value(keys::kPpEnabled, false).toBool();
+bool SettingsStore::llmEnabled() const {
+    return QSettings().value(keys::kLlmEnabled, false).toBool();
 }
-void SettingsStore::setPostProcessEnabled(bool on) {
-    QSettings().setValue(keys::kPpEnabled, on);
+void SettingsStore::setLlmEnabled(bool on) {
+    QSettings().setValue(keys::kLlmEnabled, on);
     emit changed();
 }
 
-QString SettingsStore::postProcessEndpoint() const {
-    return QSettings().value(keys::kPpEndpoint).toString();
+QString SettingsStore::llmEndpoint() const {
+    return QSettings().value(keys::kLlmEndpoint).toString();
 }
-void SettingsStore::setPostProcessEndpoint(const QString& url) {
-    QSettings().setValue(keys::kPpEndpoint, url);
+void SettingsStore::setLlmEndpoint(const QString& url) {
+    QSettings().setValue(keys::kLlmEndpoint, url);
+    emit changed();
+}
+
+QString SettingsStore::llmApiKey() const {
+    return QSettings().value(keys::kLlmApiKey).toString();
+}
+void SettingsStore::setLlmApiKey(const QString& key) {
+    QSettings().setValue(keys::kLlmApiKey, key);
+    emit changed();
+}
+
+QString SettingsStore::llmModel() const {
+    return QSettings().value(keys::kLlmModel).toString();
+}
+void SettingsStore::setLlmModel(const QString& model) {
+    QSettings().setValue(keys::kLlmModel, model);
+    emit changed();
+}
+
+QString SettingsStore::llmPrompt() const {
+    return QSettings().value(keys::kLlmPrompt, defaultLlmPrompt()).toString();
+}
+void SettingsStore::setLlmPrompt(const QString& prompt) {
+    QSettings().setValue(keys::kLlmPrompt, prompt);
+    emit changed();
+}
+QString SettingsStore::defaultLlmPrompt() {
+    return QStringLiteral(
+        "Format this text, polish the grammar, and correct any errors: "
+        "{{text}}. Return only the corrected text, without any comments or "
+        "additional remarks.");
+}
+
+QString SettingsStore::llmStripPattern() const {
+    return QSettings().value(keys::kLlmStripPattern).toString();
+}
+void SettingsStore::setLlmStripPattern(const QString& pattern) {
+    QSettings().setValue(keys::kLlmStripPattern, pattern);
+    emit changed();
+}
+
+QString SettingsStore::llmExtraParams() const {
+    return QSettings().value(keys::kLlmExtraParams).toString();
+}
+void SettingsStore::setLlmExtraParams(const QString& json) {
+    QSettings().setValue(keys::kLlmExtraParams, json);
+    emit changed();
+}
+
+int SettingsStore::llmTimeoutSeconds() const {
+    return QSettings().value(keys::kLlmTimeout, 30).toInt();
+}
+void SettingsStore::setLlmTimeoutSeconds(int s) {
+    QSettings().setValue(keys::kLlmTimeout, s);
     emit changed();
 }
 

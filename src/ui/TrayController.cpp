@@ -34,7 +34,7 @@ TrayController::TrayController(QObject* parent) : QObject(parent) {
     connect(quit, &QAction::triggered, this, &TrayController::quitRequested);
 
     tray_.setContextMenu(menu_);
-    tray_.setIcon(makeIcon(false, false));
+    tray_.setIcon(makeIcon());
     tray_.setToolTip(tr("voiceTyper — idle"));
 
     connect(&tray_, &QSystemTrayIcon::activated, this,
@@ -51,7 +51,7 @@ void TrayController::show() { tray_.show(); }
 
 void TrayController::setRecording(bool recording) {
     recording_ = recording;
-    tray_.setIcon(makeIcon(recording_, translate_));
+    tray_.setIcon(makeIcon());
     tray_.setToolTip(recording ? tr("voiceTyper — recording") : tr("voiceTyper — idle"));
     if (toggleAction_)
         toggleAction_->setText(recording ? tr("Stop dictation")
@@ -60,14 +60,19 @@ void TrayController::setRecording(bool recording) {
 
 void TrayController::setTranslate(bool translate) {
     translate_ = translate;
-    tray_.setIcon(makeIcon(recording_, translate_));
+    tray_.setIcon(makeIcon());
+}
+
+void TrayController::setLlm(bool llm) {
+    llm_ = llm;
+    tray_.setIcon(makeIcon());
 }
 
 void TrayController::showMessage(const QString& title, const QString& body) {
     tray_.showMessage(title, body, QSystemTrayIcon::Information, 3000);
 }
 
-QIcon TrayController::makeIcon(bool recording, bool translate) const {
+QIcon TrayController::makeIcon() const {
     // Draw a simple microphone glyph so the app needs no external icon asset.
     QPixmap pm(64, 64);
     pm.fill(Qt::transparent);
@@ -79,7 +84,7 @@ QIcon TrayController::makeIcon(bool recording, bool translate) const {
     // against light, dark, *and* colored backgrounds alike (a mid-tone fill
     // color, tried first, still washed out against similarly-toned menu
     // bars — white-on-black doesn't have that failure mode).
-    const QColor body = recording ? QColor(231, 76, 60) : QColor(245, 245, 245);
+    const QColor body = recording_ ? QColor(231, 76, 60) : QColor(245, 245, 245);
     const QColor outlineColor(15, 15, 15);
 
     // The glyph is drawn twice: once oversized in the outline color, then at
@@ -103,18 +108,27 @@ QIcon TrayController::makeIcon(bool recording, bool translate) const {
     drawGlyph(outlineColor, 2);
     drawGlyph(body, 0);
 
-    if (translate) {
-        const QRectF badge(8, 0, 56, 36);
+    // Mode badges: "EN" (translate) on top, "AI" (LLM processing) below it.
+    // Alone, a badge keeps the full height; together they split the icon.
+    const bool both = translate_ && llm_;
+    auto drawBadge = [&](const QRectF& badge, const QColor& color,
+                         const QString& text) {
         p.setPen(QPen(outlineColor, 2));
-        p.setBrush(QColor(34, 139, 34));
+        p.setBrush(color);
         p.drawRoundedRect(badge, 6, 6);
         p.setPen(Qt::white);
         QFont f;
-        f.setPixelSize(26);
+        f.setPixelSize(both ? 24 : 26);
         f.setBold(true);
         p.setFont(f);
-        p.drawText(badge, Qt::AlignCenter, QStringLiteral("EN"));
-    }
+        p.drawText(badge, Qt::AlignCenter, text);
+    };
+    if (translate_)
+        drawBadge(both ? QRectF(8, 0, 56, 31) : QRectF(8, 0, 56, 36),
+                  QColor(34, 139, 34), QStringLiteral("EN"));
+    if (llm_)
+        drawBadge(both ? QRectF(8, 33, 56, 31) : QRectF(8, 0, 56, 36),
+                  QColor(25, 118, 210), QStringLiteral("AI"));
 
     p.end();
     return QIcon(pm);

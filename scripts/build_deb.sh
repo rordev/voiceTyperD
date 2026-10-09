@@ -212,6 +212,13 @@ bundle_qt() {
         [ -e "$f" ] && cp "$f" "${plugdir}/wayland-shell-integration/"
     done
 
+    # TLS backends: HTTPS for LLM processing. The OpenSSL one dlopen's the
+    # system libssl.so.3 (see the Depends below).
+    mkdir -p "${plugdir}/tls"
+    for f in "${QT_KIT}/plugins/tls/"*.so; do
+        [ -e "$f" ] && cp "$f" "${plugdir}/tls/"
+    done
+
     echo "  Bundling Qt libs..."
     # Breadth-first over DT_NEEDED: whatever the kit ships is copied under its
     # soname (symlinks resolved) and scanned in turn; everything else has to
@@ -425,6 +432,8 @@ DESKTOP_EOF
     # The kit's FFmpeg needs libbz2.so.1, which Ubuntu only ships as a compat
     # symlink to libbz2.so.1.0 - dpkg-shlibdeps can't map that to a package.
     case "$deps" in *libbz2-1.0*) ;; *) deps="${deps:+$deps, }libbz2-1.0" ;; esac
+    # Qt's OpenSSL TLS plugin dlopen's libssl.so.3 — not a DT_NEEDED either.
+    case "$deps" in *libssl3*) ;; *) deps="${deps:+$deps, }libssl3t64 | libssl3" ;; esac
 
     if [ "$with_vulkan" = "ON" ]; then
         # The Vulkan loader must come from the system so it can find the GPU ICDs.

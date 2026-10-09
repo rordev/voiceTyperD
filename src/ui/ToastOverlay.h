@@ -19,6 +19,9 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
+    QFont textFont() const;
+    // Grows the toast past its minimum size so `text_` fits; long text wraps.
+    void fitToText();
     void positionAboveOverlay();
 
     QString text_;

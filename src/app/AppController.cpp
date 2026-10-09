@@ -9,8 +9,7 @@
 #include "core/FileLogging.h"
 #include "core/Logging.h"
 #include "hotkey/HotkeyService.h"
-#include "postprocess/HttpTextPostProcessor.h"
-#include "postprocess/NoOpTextPostProcessor.h"
+#include "postprocess/LlmPostProcessor.h"
 #include "settings/SettingsStore.h"
 #include "ui/OverlayWindow.h"
 #include "ui/SettingsWindow.h"
@@ -47,7 +46,7 @@ bool AppController::initialize() {
 
     buildAsrEngine();
     reloadCommands();
-    buildPostProcessor();
+    llm_ = new LlmPostProcessor(this);
 
     paste_ = new ClipboardPasteService(this);
     paste_->setRestoreDelayMs(settings_->clipboardRestoreDelayMs());
@@ -91,14 +90,28 @@ bool AppController::initialize() {
                     tray_->showMessage(tr("voiceTyper — translation hotkey"), reason);
             });
 
+    llmHotkey_ = HotkeyService::create(this);
+    llmHotkey_->setShortcutInfo(QStringLiteral("llm"),
+                                tr("Toggle LLM processing"));
+    connect(llmHotkey_, &HotkeyService::activated, this,
+            &AppController::toggleLlm);
+    connect(llmHotkey_, &HotkeyService::registrationFailed, this,
+            [this](const QString& reason) {
+                qCWarning(vtApp) << "LLM hotkey registration failed:" << reason;
+                if (tray_)
+                    tray_->showMessage(tr("voiceTyper — LLM hotkey"), reason);
+            });
+
     rebuildRecording();
 
     applyHotkey();
     applyTranslateHotkey();
+    applyLlmHotkey();
 
     if (!tray_->isAvailable())
         qCWarning(vtApp) << "System tray not available on this platform";
     tray_->setTranslate(settings_->translate());
+    tray_->setLlm(settings_->llmEnabled());
     tray_->show();
 
     // buildAsrEngine() ran before the tray existed; surface any recovery note
@@ -252,16 +265,6 @@ void AppController::wireRecordingController() {
             &AppController::onDuration);
 }
 
-void AppController::buildPostProcessor() {
-    if (settings_->postProcessEnabled() &&
-        !settings_->postProcessEndpoint().isEmpty()) {
-        postProcessor_ = std::make_unique<HttpTextPostProcessor>(
-            settings_->postProcessEndpoint().toStdString());
-    } else {
-        postProcessor_ = std::make_unique<NoOpTextPostProcessor>();
-    }
-}
-
 void AppController::reloadCommands() {
     QString error;
     const CommandConfig cfg =
@@ -286,6 +289,16 @@ void AppController::applyTranslateHotkey() {
         translateHotkey_->setHotkey(seq);
 }
 
+void AppController::applyLlmHotkey() {
+    if (!llmHotkey_)
+        return;
+    const QString seq = settings_->llmHotkey();
+    if (seq.isEmpty())
+        llmHotkey_->unregisterHotkey();
+    else
+        llmHotkey_->setHotkey(seq);
+}
+
 void AppController::toggleTranslate() {
     const bool on = !settings_->translate();
     settings_->setTranslate(on);
@@ -296,6 +309,37 @@ void AppController::toggleTranslate() {
                              : tr("Translation to English: off"));
 }
 
+void AppController::toggleLlm() {
+    const bool on = !settings_->llmEnabled();
+    settings_->setLlmEnabled(on);
+    if (tray_)
+        tray_->setLlm(on);
+    if (!toast_)
+        return;
+    if (!on)
+        toast_->showToast(tr("LLM processing: off"));
+    else if (settings_->llmEndpoint().trimmed().isEmpty())
+        // Dictation still works: the request fails and the text is pasted
+        // unchanged. Say why up front.
+        toast_->showToast(tr("LLM processing: on — no endpoint URL set"));
+    else
+        toast_->showToast(tr("LLM processing: on"));
+}
+
+LlmRequestConfig AppController::llmConfig() const {
+    LlmRequestConfig cfg;
+    cfg.endpoint = settings_->llmEndpoint();
+    cfg.apiKey = settings_->llmApiKey();
+    cfg.model = settings_->llmModel();
+    cfg.promptTemplate = settings_->llmPrompt();
+    cfg.stripPattern = settings_->llmStripPattern();
+    cfg.timeoutMs = settings_->llmTimeoutSeconds() * 1000;
+    QString error;
+    if (!parseExtraParams(settings_->llmExtraParams(), &cfg.extraParams, &error))
+        qCWarning(vtLlm) << "Extra request fields ignored:" << error;
+    return cfg;
+}
+
 void AppController::toggleRecording() {
     if (!recording_)
         return;
@@ -304,7 +348,7 @@ void AppController::toggleRecording() {
     } else if (processing_) {
         if (tray_)
             tray_->showMessage(tr("voiceTyper"),
-                               tr("Still transcribing the previous take..."));
+                               tr("Still processing the previous take..."));
     } else {
         recording_->startRecording();
     }
@@ -404,24 +448,54 @@ void AppController::startTranscription() {
 }
 
 void AppController::finishTranscription(const QString& rawText) {
-    processing_ = false;
-    if (overlay_)
-        overlay_->hideOverlay();
-
     qCInfo(vtApp) << "Recognized text:" << rawText;
 
     const CommandProcessingResult processed =
         commandEngine_.processFinalText(rawText.toStdString());
-    const std::string cleaned = postProcessor_->process(processed.text);
-    const QString finalText = QString::fromStdString(cleaned);
+    const QString text = QString::fromStdString(processed.text);
 
-    if (finalText.isEmpty()) {
+    if (text.isEmpty()) {
+        processing_ = false;
+        if (overlay_)
+            overlay_->hideOverlay();
         if (!rawText.isEmpty())
             qCInfo(vtApp) << "Final text empty after command processing";
         else if (tray_)
             tray_->showMessage(tr("voiceTyper"), tr("Nothing was recognized."));
         return;
     }
+
+    if (!settings_->llmEnabled()) {
+        pasteFinalText(text);
+        return;
+    }
+
+    // processing_ stays set until the answer arrives, so a new take can't
+    // start and paste ahead of this one.
+    if (overlay_ && overlay_->isVisible())
+        overlay_->setStatus(tr("Processing with LLM..."));
+    llm_->process(llmConfig(), text,
+                  [this, text](const QString& answer, const QString& error) {
+                      if (error.isEmpty()) {
+                          pasteFinalText(answer);
+                          return;
+                      }
+                      // Dictation must not get lost to a network or server
+                      // problem: paste what was said instead.
+                      if (tray_)
+                          tray_->showMessage(
+                              tr("voiceTyper — LLM"),
+                              tr("LLM processing failed: %1\nThe dictated text "
+                                 "was pasted unchanged.")
+                                  .arg(error));
+                      pasteFinalText(text);
+                  });
+}
+
+void AppController::pasteFinalText(const QString& finalText) {
+    processing_ = false;
+    if (overlay_)
+        overlay_->hideOverlay();
 
 #ifdef Q_OS_MAC
     // Reactivate whatever app was frontmost when recording started, in case
@@ -435,13 +509,15 @@ void AppController::finishTranscription(const QString& rawText) {
 }
 
 void AppController::onSettingsApplied() {
-    if (tray_)
+    if (tray_) {
         tray_->setTranslate(settings_->translate());
+        tray_->setLlm(settings_->llmEnabled());
+    }
     paste_->setRestoreDelayMs(settings_->clipboardRestoreDelayMs());
     reloadCommands();
-    buildPostProcessor();
     applyHotkey();
     applyTranslateHotkey();
+    applyLlmHotkey();
     setFileLoggingEnabled(settings_->loggingEnabled());
 
     // Rebuild the ASR backend (and the recorder that borrows it) if the model
@@ -474,6 +550,10 @@ void AppController::quit() {
         hotkey_->unregisterHotkey();
     if (translateHotkey_)
         translateHotkey_->unregisterHotkey();
+    if (llmHotkey_)
+        llmHotkey_->unregisterHotkey();
+    if (llm_)
+        llm_->cancel();
     if (worker_.joinable())
         worker_.join();
     // Clear the first-inference breadcrumb if the user closes before any

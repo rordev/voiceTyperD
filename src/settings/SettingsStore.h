@@ -60,6 +60,9 @@ public:
     QString translateHotkey() const;     // toggle translate-to-English
     void setTranslateHotkey(const QString& seq);
 
+    QString llmHotkey() const;           // toggle LLM processing
+    void setLlmHotkey(const QString& seq);
+
     // --- Overlay ---------------------------------------------------------
     bool overlayEnabled() const;
     void setOverlayEnabled(bool on);
@@ -78,12 +81,34 @@ public:
     double commandDetectionWindowSeconds() const; // tail length analysed
     void setCommandDetectionWindowSeconds(double s);
 
-    // --- Post-processing (future HTTPS cleanup) -------------------------
-    bool postProcessEnabled() const;
-    void setPostProcessEnabled(bool on);
+    // --- LLM processing --------------------------------------------------
+    // When on, the dictated text (after voice commands) goes to an
+    // OpenAI-compatible chat-completions endpoint and the model's answer is
+    // pasted instead. Read per dictation.
+    bool llmEnabled() const;
+    void setLlmEnabled(bool on);
 
-    QString postProcessEndpoint() const;
-    void setPostProcessEndpoint(const QString& url);
+    QString llmEndpoint() const;         // full chat-completions URL
+    void setLlmEndpoint(const QString& url);
+
+    QString llmApiKey() const;           // optional; stored unencrypted
+    void setLlmApiKey(const QString& key);
+
+    QString llmModel() const;            // optional; omitted when empty
+    void setLlmModel(const QString& model);
+
+    QString llmPrompt() const;           // template; {{text}} = dictated text
+    void setLlmPrompt(const QString& prompt);
+    static QString defaultLlmPrompt();
+
+    QString llmStripPattern() const;     // regex cut from the answer; empty = none
+    void setLlmStripPattern(const QString& pattern);
+
+    QString llmExtraParams() const;      // JSON object merged into the request
+    void setLlmExtraParams(const QString& json);
+
+    int llmTimeoutSeconds() const;
+    void setLlmTimeoutSeconds(int s);
 
     // --- Diagnostics -----------------------------------------------------
     // Write a diagnostic log file (<configDir>/voicetyper.log). On by default

@@ -1,5 +1,6 @@
 #include "ui/OverlayWindow.h"
 
+#include <QFontMetrics>
 #include <QGuiApplication>
 #include <QPainter>
 #include <QPainterPath>
@@ -12,7 +13,7 @@
 namespace vt {
 
 namespace {
-constexpr int kWidth = 220;
+constexpr int kWidth = 270; // fits "Processing with LLM..."
 constexpr int kHeight = 64;
 constexpr int kMargin = 24;
 } // namespace
@@ -108,8 +109,10 @@ void OverlayWindow::paintEvent(QPaintEvent*) {
     QFont f = p.font();
     f.setPointSizeF(f.pointSizeF() + 0.5);
     p.setFont(f);
-    p.drawText(QRect(38, 8, kWidth - 100, 28), Qt::AlignVCenter | Qt::AlignLeft,
-               status_);
+    const QRect statusRect(38, 8, kWidth - 100, 28);
+    p.drawText(statusRect, Qt::AlignVCenter | Qt::AlignLeft,
+               QFontMetrics(f).elidedText(status_, Qt::ElideRight,
+                                          statusRect.width()));
 
     // Elapsed timer (mm:ss), right aligned.
     const int total = static_cast<int>(elapsed_);

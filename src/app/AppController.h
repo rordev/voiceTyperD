@@ -1,6 +1,7 @@
 #pragma once
 
 #include "commands/CommandEngine.h"
+#include "postprocess/LlmChat.h"
 
 #include <QObject>
 #include <QString>
@@ -12,7 +13,7 @@ namespace vt {
 
 class SettingsStore;
 class IAsrEngine;
-class ITextPostProcessor;
+class LlmPostProcessor;
 class RecordingController;
 class ClipboardPasteService;
 class HotkeyService;
@@ -25,7 +26,8 @@ class SettingsWindow;
 // command processing and clipboard paste into the end-to-end dictation flow:
 //
 //   startRecording -> (live stop detection) -> stopRecording
-//     -> transcribe (worker thread) -> processCommands -> postProcess
+//     -> transcribe (worker thread) -> processCommands
+//     -> [LLM processing, when on: async HTTP round trip]
 //     -> pasteText (clipboard + synthesized paste + restore)
 class AppController : public QObject {
     Q_OBJECT
@@ -48,6 +50,7 @@ private slots:
     void onDuration(double seconds);
     void onSettingsApplied();
     void toggleTranslate();
+    void toggleLlm();
 
 private:
     void buildAsrEngine();
@@ -56,22 +59,26 @@ private:
     void flushPendingNotice();
     void rebuildRecording();
     void wireRecordingController();
-    void buildPostProcessor();
     void applyHotkey();
     void applyTranslateHotkey();
+    void applyLlmHotkey();
+    LlmRequestConfig llmConfig() const;
     void reloadCommands();
     void startTranscription();
     void finishTranscription(const QString& rawText);
+    // Ends the take: clears processing_, hides the overlay, pastes the text.
+    void pasteFinalText(const QString& finalText);
 
     std::unique_ptr<IAsrEngine> asr_;
     CommandEngine commandEngine_;
-    std::unique_ptr<ITextPostProcessor> postProcessor_;
 
     SettingsStore* settings_ = nullptr;
     RecordingController* recording_ = nullptr;
     ClipboardPasteService* paste_ = nullptr;
     HotkeyService* hotkey_ = nullptr;
     HotkeyService* translateHotkey_ = nullptr;
+    HotkeyService* llmHotkey_ = nullptr;
+    LlmPostProcessor* llm_ = nullptr;
     OverlayWindow* overlay_ = nullptr;
     ToastOverlay* toast_ = nullptr;
     TrayController* tray_ = nullptr;
@@ -85,6 +92,7 @@ private:
     // failure); shown via the tray when one is available, then cleared.
     QString pendingNotice_;
 
+    // From the end of recording until the paste, LLM wait included.
     bool processing_ = false;
 
     // buildAsrEngine() runs once at startup and again on every settings-apply

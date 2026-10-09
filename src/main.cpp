@@ -17,6 +17,7 @@ Q_LOGGING_CATEGORY(vtAsr, "voicetyper.asr")
 Q_LOGGING_CATEGORY(vtCmd, "voicetyper.cmd")
 Q_LOGGING_CATEGORY(vtInput, "voicetyper.input")
 Q_LOGGING_CATEGORY(vtUi, "voicetyper.ui")
+Q_LOGGING_CATEGORY(vtLlm, "voicetyper.llm")
 
 namespace {
 

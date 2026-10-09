@@ -29,8 +29,10 @@ account, no telemetry. Your audio never leaves the device.
 - 🎙️ **Push-to-talk dictation anywhere.** A single global hotkey starts/stops
   recording and types into whatever field has focus — editors, browsers, chat,
   terminals.
-- 🔒 **100% offline & private.** Transcription is local via whisper.cpp. Nothing
-  is uploaded; there are no API keys or network calls for recognition.
+- 🔒 **Offline & private by default.** Transcription is local via whisper.cpp.
+  Nothing is uploaded; there are no API keys or network calls for recognition.
+  Only the optional LLM processing (off by default) sends text out, to the
+  endpoint you configure.
 - ⚡ **GPU acceleration with runtime backend selection.** The same build ships
   CPU + (where the host toolchain allowed) **Vulkan** and **CUDA**. The app
   enumerates the *live* devices on the machine and lets you pick one in Settings;
@@ -44,6 +46,11 @@ account, no telemetry. Your audio never leaves the device.
   speak, not just at the end. The stop word is stripped from the result.
 - 🌍 **Multilingual.** 16 recognition languages plus auto-detect, with an
   optional **translate-to-English** mode (Whisper's built-in translation).
+- 🤖 **Optional LLM processing.** Send the dictated text to any
+  OpenAI-compatible chat-completions endpoint (cloud API or a local Ollama /
+  llama.cpp server / LM Studio) with your prompt, and paste the model's answer
+  instead — toggled on the fly with **Ctrl+Alt+A**, like translation. See
+  [LLM processing](#llm-processing).
 - ✍️ **Consistent punctuation.** A per-language *initial prompt* (editable
   `prompts.json`) shows Whisper the punctuation and casing style to follow, so
   it stops alternating between tidy prose and unpunctuated lowercase. See
@@ -81,6 +88,8 @@ account, no telemetry. Your audio never leaves the device.
    are shortened), and whisper.cpp transcribes it locally (on CPU or your
    selected GPU), guided by the language's [initial prompt](#punctuation-style-initial-prompts).
 7. Voice **commands** (e.g. "new line" → newline) are applied to the text.
+   With [LLM processing](#llm-processing) on, the text then goes to the model
+   and its answer is used instead.
 8. The result is placed on the clipboard, the paste shortcut is synthesized
    (`Ctrl+V` / `Cmd+V`), and your previous clipboard is restored shortly after.
 
@@ -206,6 +215,48 @@ recordings are transcribed whole, as before.
 
 ---
 
+## LLM processing
+
+With LLM processing on, the dictated text (after voice commands) is sent to an
+OpenAI-compatible **chat-completions** endpoint, and the model's answer is
+pasted instead of the text. Turn it on and off with the hotkey (default
+**Ctrl+Alt+A**; a toast confirms, and the tray icon shows an **AI** badge while
+it is on) or under **Settings → LLM**. Any server that speaks the OpenAI chat
+format works: a cloud API, or a local Ollama, llama.cpp server or LM Studio.
+
+- **Endpoint URL** — the full URL, e.g.
+  `https://api.example.com/v1/chat/completions` or
+  `http://localhost:11434/v1/chat/completions`. The only required field.
+- **API key** — optional; sent as `Authorization: Bearer <key>`. Stored
+  unencrypted in the app settings.
+- **Model** — optional; left out of the request when empty (for servers with a
+  single model).
+- **Prompt** — sent as the single user message, with `{{text}}` replaced by the
+  dictated text. Default: *Format this text, polish the grammar, and correct any
+  errors: {{text}}. Return only the corrected text, without any comments or
+  additional remarks.*
+- **Remove from answer (regex)** — optional; every match is cut from the answer
+  before pasting, e.g. `<think>[\s\S]*?</think>` for a model that writes its
+  reasoning into the answer. Empty: the whole answer is pasted.
+- **Extra request fields (JSON)** — optional object merged into the request
+  body, e.g. `{"temperature": 0.2, "max_tokens": 4096}`.
+- **Test** — sends a sample text with the fields as they are (unsaved) and shows
+  what would be pasted.
+
+The request is a plain, non-streamed `POST`:
+
+```json
+{"model": "<model>", "messages": [{"role": "user", "content": "<prompt with the text>"}], "stream": false}
+```
+
+The answer is `choices[0].message.content`. While it is pending the overlay
+shows *Processing with LLM...* and a new dictation can't start. If the request
+fails — no answer within the timeout (default 30 s), an HTTP error, an empty
+answer — the tray says why and **the dictated text is pasted unchanged**, so
+nothing you said is lost.
+
+---
+
 ## Settings
 
 Open **Settings** from the tray menu. Everything persists via `QSettings`.
@@ -216,6 +267,7 @@ Open **Settings** from the tray menu. Everything persists via `QSettings`.
 | Translate to English | off | Whisper's built-in translation |
 | Decode only detected speech (VAD) | on | Silero VAD trims silence before Whisper; turn off if words or whole dictations go missing |
 | Global hotkey | `Ctrl+Alt+V` | single chord |
+| Translation toggle hotkey | `Ctrl+Alt+P` | toggles translate-to-English |
 | Whisper model | auto-detected | path to `ggml-*.bin`; **Browse…** + **Download models** link |
 | Compute backend | Auto (prefer GPU) | CPU / Vulkan / CUDA as available |
 | Show recording overlay | on | timer + level meter |
@@ -224,6 +276,20 @@ Open **Settings** from the tray menu. Everything persists via `QSettings`.
 | Sampling interval | 2000 ms | how often the loop checks |
 | Tail window analysed | 4.0 s | length of audio the loop transcribes |
 | Commands (JSON) | bundled defaults | editable, with a **Validate** button |
+
+The **LLM** tab holds the [LLM processing](#llm-processing) settings:
+
+| Setting | Default | Notes |
+|---|---|---|
+| Process dictated text with the LLM | off | also toggled by the hotkey below |
+| LLM toggle hotkey | `Ctrl+Alt+A` | single chord |
+| Endpoint URL | — | full chat-completions URL; without it the text is pasted unchanged |
+| API key | — | optional |
+| Model | — | optional |
+| Timeout | 30 s | then the dictated text is pasted unchanged |
+| Prompt | see above | `{{text}}` = the dictated text |
+| Remove from answer (regex) | — | every match is cut from the answer |
+| Extra request fields (JSON) | — | merged into the request body |
 
 ---
 
@@ -542,7 +608,7 @@ AppController            end-to-end coordinator (the dictation pipeline)
 ├─ ClipboardPasteService save clipboard → set text → paste → restore
 │   └─ KeyboardPaster        platform keystroke synth (X11 / Wayland portal / Win / mac)
 ├─ HotkeyService        global hotkey (X11 XGrabKey / Wayland portal / Win RegisterHotKey / mac NSEvent monitors)
-├─ TextPostProcessor    NoOp now; HttpTextPostProcessor skeleton for future LLM cleanup
+├─ LlmPostProcessor     optional OpenAI-compatible chat-completions step before the paste
 ├─ SettingsStore        QSettings + commands.json + prompts.json
 └─ UI: OverlayWindow · TrayController · SettingsWindow
 
@@ -561,5 +627,4 @@ Source lives under `src/` grouped by module (`app/`, `audio/`, `asr/`, `commands
   the hotkey and paste keystroke, which silently no-op until granted).
 - `regex` reconstruction parity with the phrase pass (whitespace-inserting regex).
 - Additional command actions (`submit`, `escape`, `delete_previous_word`, …).
-- `HttpTextPostProcessor`: real HTTPS LLM cleanup with graceful fallback.
 - In-app model auto-download (currently a links dialog + helper scripts).
