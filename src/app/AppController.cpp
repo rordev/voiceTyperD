@@ -523,6 +523,14 @@ void AppController::onSettingsApplied() {
     // this is safe.
     if (settings_->modelPath() != lastModelPath_ ||
         settings_->computeBackend() != lastComputeBackend_) {
+        // The recorder's CommandDetectionLoop can still have an ASR worker.
+        // deleteLater() does not destroy it here: it would keep a dangling
+        // pointer into the old engine while buildAsrEngine() replaces it.
+        // Dispose of the recorder synchronously, joining its worker first.
+        if (recording_) {
+            delete recording_;
+            recording_ = nullptr;
+        }
         buildAsrEngine();
         rebuildRecording();
         qCInfo(vtApp) << "ASR backend reloaded:"

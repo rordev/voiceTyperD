@@ -133,6 +133,9 @@ void SettingsWindow::buildUi() {
     // Compute backend: CPU is always present; Vulkan/CUDA entries appear only
     // when the build includes that backend AND a live device is detected.
     computeBackend_ = new QComboBox(this);
+    // Keep "auto" as an actual stored choice; otherwise merely opening and
+    // saving settings silently changes "" to a specific GPU and reloads ASR.
+    computeBackend_->addItem(tr("Auto (prefer GPU)"), QString());
     for (const ComputeDevice& d : enumerateComputeDevices()) {
         const QString label =
             d.isGpu ? QString::fromStdString(d.backendName + " — " + d.deviceName)
@@ -414,19 +417,10 @@ void SettingsWindow::loadFromSettings() {
                                                    QKeySequence::PortableText));
     modelPath_->setText(settings_->modelPath());
 
-    // Select the saved backend; if it's empty ("auto") or no longer available,
-    // prefer the first GPU when present, otherwise CPU.
-    int bidx = computeBackend_->findData(settings_->computeBackend());
-    if (bidx < 0) {
-        bidx = 0;
-        for (int i = 0; i < computeBackend_->count(); ++i) {
-            if (computeBackend_->itemData(i).toString() != QLatin1String("cpu")) {
-                bidx = i;
-                break;
-            }
-        }
-    }
-    computeBackend_->setCurrentIndex(bidx);
+    // Empty backend means "Auto": keep it, rather than silently replacing
+    // it with a specific GPU on an unrelated settings save.
+    const int bidx = computeBackend_->findData(settings_->computeBackend());
+    computeBackend_->setCurrentIndex(bidx >= 0 ? bidx : 0);
 
 
     overlayEnabled_->setChecked(settings_->overlayEnabled());
